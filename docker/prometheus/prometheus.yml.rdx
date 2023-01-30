@@ -1,0 +1,51 @@
+---
+global:
+  evaluation_interval: 15s
+  scrape_interval: 5s
+scrape_configs:
+- basic_auth:
+    password: z+zTAtjjl4O3k5aKsCZQ0eGmI8Xej2NNKyjI+98z1sw=
+    username: metrics
+  job_name: mynode
+  metrics_path: /prometheus/metrics
+  relabel_configs:
+  - regex: ([^:]+):\d+
+    source_labels:
+    - __address__
+    target_label: public_ip
+  scheme: https
+  static_configs:
+  - labels:
+      network: mynode
+    targets:
+    - docker-nginx-1
+  tls_config:
+    insecure_skip_verify: true
+- basic_auth:
+    password: z+zTAtjjl4O3k5aKsCZQ0eGmI8Xej2NNKyjI+98z1sw=
+    username: metrics
+  job_name: gateway
+  metrics_path: /gateway/metrics
+  scheme: https
+  static_configs:
+  - labels:
+      container: gateway-api
+      network: mynode
+    targets:
+    - docker-nginx-1
+  tls_config:
+    insecure_skip_verify: true
+- basic_auth:
+    password: z+zTAtjjl4O3k5aKsCZQ0eGmI8Xej2NNKyjI+98z1sw=
+    username: metrics
+  job_name: aggregator
+  metrics_path: /aggregator/metrics
+  scheme: https
+  static_configs:
+  - labels:
+      container: data-aggregator
+      network: mynode
+    targets:
+    - docker-nginx-1
+  tls_config:
+    insecure_skip_verify: true

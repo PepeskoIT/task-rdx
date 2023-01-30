@@ -1,92 +1,83 @@
-# Rdx Task
+# Introduction
+
+The challenge has three parts:
+* Infrastructure: requires running a fullnode and a network Gateway.
+* Coding challenge that will use the infrastructure setup in the first place
+* Questions about the Radix network
+
+## Full Node and Core API
+
+When third parties want to integrate the Radix Network (e.g. adding XRD to an exchange), they need to install a full node to use as an endpoint to get a full, reliable stream of all transactions on the Radix network via the Core API that the full node offers. Here are the key parts of the Radix Tech Docs that include instructions on how to install a full node.
+
+* [The Core API](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/radixdlt/radixdlt/1.1.1/radixdlt-core/radixdlt/src/main/java/com/radixdlt/api/core/api.yaml#section/Overview)
+* [Full Node Introduction](https://docs.radixdlt.com/main/node-and-gateway/node-introduction.html)
+* [Full Node Setup](https://docs.radixdlt.com/main/node-and-gateway/node-setup-introduction.html)
+  * [CLI method](https://docs.radixdlt.com/main/node-and-gateway/cli-install.html)
+  * [Docker method](https://docs.radixdlt.com/main/node-and-gateway/docker-install-node.html)
+
+Once your full node is installed, you can then use the RadixNode CLI to configure your full node to expose the Core API. A complete list of commands within the RadixNode CLI can be found on GitHub [here](https://github.com/radixdlt/node-runner#interaction-with-node). We recommend that you only expose the Core API privately. It should never be exposed publicly.
+
+The Core API provides a transaction stream (indexed, and strictly ordered) that can be used to synchronize a full or partial view of the ledger, transaction by transaction. Using Core API, you may observe deposits and withdrawals across all accounts (called Data API), as well as build transactions (called Construction API). You can then parse that data in any way that you think is useful for your project. By Radix’s consensus design, transactions have deterministic finality and so all transactions that appear via the Core API are ordered, truly final and cannot be reversed; no “number of blocks” threshold of safety is needed.
+
+To monitor the health of your node, we recommend you use Prometheus and Grafana with the RadixNode CLI.
+* [Setting up the Grafana dashboard using the RadixNode CLI](https://docs.radixdlt.com/main/node-and-gateway/install-grafana-dashboard.html)
+
+## Network Gateway and Gateway API
+As per above, the Core API provides low-level transaction-by-transaction data. Some exchanges and other service providers prefer a higher-level API for making specific queries on transactions or addresses, and a simplified method of creating and submitting transactions. Typically, this would be in addition to the Core API – not as a replacement for it. This is why we have created the Network Gateway and Gateway API, which is also used by the Radix Desktop Wallet and Explorer.
+
+The Network Gateway is software that you can install. Like the full node, you should run a Network Gateway for your own consumption if you desire to use the Gateway API. The Network Gateway is designed to take the Core API transaction stream from your node, add it to a PostgreSQL database (via the Data Aggregator), and then present the Gateway API for public consumption. Transactions can also be submitted via Gateway API, for example from wallets.
+* [An Introduction to the Network Gateway](https://docs.radixdlt.com/main/node-and-gateway/network-gateway.html)
+* [The Gateway API](https://docs.radixdlt.com/main/apis/gateway-api.html)
+* [Radix Gateway API (1.1.2)](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/radixdlt/radixdlt-network-gateway/1.1.1/gateway-api-spec.yaml)
+
+# Infrastructure Challenge
+
+Following the instructions and links described in the introduction, you need to achieve the following:
+* Install a fullnode connected to mainnet and network gateway
+* Configure monitoring using the node cli  (or any other method)
+
+You can install this in a personal machine or in any cloud provider of your choice. Before the interview:
+* Commit to the repository the docker-compose file that you use to deploy the fullnode, network gateway and Grafana
+* Provide a screenshot of the Grafana dashboard
+* Brief summary of the challenges
+
+**During the interview you’ll have to share your screen showing the setup**
 
 
+# Coding challenge
 
-## Getting started
+Using the Core API, design and implement a system that is continuously pulling all the submitted transactions to the network and detects a token transfer of any type. 
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+* When a transfer is detected, store information regarding the token transferred and the total amount transferred. 
+* Given a list of account addresses, just store transfers involving (sending or receiving) those accounts and discard the rest.
+* Data can be stored in memory
+* Balances only need to be tracked since the application is started
+* **Python** is the preferred language (Rust or Java submissions accepted as well)
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Transfer API
+Build and API that contains the following endpoints: 
 
-## Add your files
+|Endpoint   |  Medhod  | Description|
+|---|---|---|
+|  /transfers | GET  | List tokens and amount transferred |
+| /transfers/:rri_id  |  GET | Returns amounts transferred to token with ID rri_id |
+| /transfers/:address  |  GET | Returns transfers to the monitored addresses |
+| /monitor  |  POST | Adds a list of addresses to be monitored (See example payload below) |
+| /monitor  |  DELETE | Deletes all addresses to be monitored |
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
 
+### Payload to add a list of addresses to monitor
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/Pepesko/rdx-task.git
-git branch -M main
-git push -uf origin main
+{
+“Address”: [“rdx1qspd0ge3xj4pqk4dmugw77l7wxfwuepj6fvwpfcvfd89jzwc40add2qxrsud4”]
+}
 ```
 
-## Integrate with your tools
 
-- [ ] [Set up project integrations](https://gitlab.com/Pepesko/rdx-task/-/settings/integrations)
+# Questions about the Radix network
+During the interview we will ask the following questions, so prepare to answer them as you wish.
 
-## Collaborate with your team
+* What is radix transaction model? Pick any other Layer 1 protocol and compare them.
+* Describe how fees work in Radix.
+* What is the consensus algorithm used by Radix? Chose any other blockchain/DLT and explain how it compares.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.

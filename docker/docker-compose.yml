@@ -1,0 +1,239 @@
+version: '3.8'
+
+# TODO: add networks: api / monitoring / backend etc.
+
+x-logging: &default-logging
+ logging:
+   options:
+     max-size: "100m"
+     max-file: "3"
+   driver: local
+
+x-restart: &default-restart
+ restart: "no"
+
+services:
+# ------------------- TASK API BACKEND ---------------------
+  tracker-api:
+    #container_name: api
+    build:
+      dockerfile: docker/api/Dockerfile
+      context: ./..
+      args:
+        - APP_PATH=/usr/local/src
+    environment:
+      APP_LOGGER_NAME: tracker-api
+      WSGI_WORKERS_COUNT: 2
+      WSGI_LOG_LEVEL: debug
+      WSGI_PORT: $CONTAINER_BACKEND_PORT
+      CORE_API_PORT: 443
+      CORE_API_URL: nginx
+      CORE_API_USER: $CORE_API_USER
+      CORE_API_PASSWORD: $CORE_API_PASSWORD
+      NETWORK_API_PORT: 443
+      NETWORK_API_URL: nginx
+      NETWORK_API_USER: $CORE_API_USER
+      NETWORK_API_PASSWORD: $CORE_API_PASSWORD
+      CACHE_PORT: 6379
+      CACHE_URL: tracker-cache
+    ports:
+      - $HOST_BACKEND_PORT:$CONTAINER_BACKEND_PORT
+    depends_on:
+      - core
+      - tracker-cache
+      - tracker-sync
+    <<: *default-logging 
+    <<: *default-restart
+
+  tracker-sync:
+    #container_name: api
+    build:
+      dockerfile: docker/sync/Dockerfile
+      context: ./..
+      args:
+        - APP_PATH=/usr/local/src
+    environment:
+      APP_LOGGER_NAME: tracker-sync
+      WSGI_PORT: $CONTAINER_BACKEND_PORT
+      CORE_API_PORT: 443
+      CORE_API_URL: nginx
+      CORE_API_USER: $CORE_API_USER
+      CORE_API_PASSWORD: $CORE_API_PASSWORD
+      NETWORK_API_PORT: 443
+      NETWORK_API_URL: nginx
+      NETWORK_API_USER: $CORE_API_USER
+      NETWORK_API_PASSWORD: $CORE_API_PASSWORD
+      CACHE_PORT: 6379
+      CACHE_URL: tracker-cache
+    depends_on:
+      - core
+      - tracker-cache
+    <<: *default-logging 
+    <<: *default-restart
+
+  tracker-cache:
+    # container_name: cache
+    image: redis:alpine
+    command: redis-server --port 6379 --loglevel warning #--save 3600 1
+    <<: *default-logging
+    <<: *default-restart
+    ports:
+      - 6379:6379
+    volumes:
+      - tracker_cache_data:/data
+# -------------------- FULL NODE RDX -----------------------
+
+  core:
+    image: radixdlt/radixdlt-core:1.3.2
+    init: true
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+      memlock: -1
+    restart: unless-stopped
+    mem_limit: 16000m
+    cap_add:
+      - NET_ADMIN
+    environment:
+      RADIXDLT_NETWORK_SEEDS_REMOTE: "${RADIXDLT_NETWORK_NODE}"
+      RADIXDLT_LOG_LEVEL: info
+      JAVA_OPTS: --enable-preview -server -Xms8g -Xmx8g  -XX:MaxDirectMemorySize=2048m -XX:+HeapDumpOnOutOfMemoryError -XX:+UseCompressedOops -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Djavax.net.ssl.trustStoreType=jks -Djava.security.egd=file:/dev/urandom -DLog4jContextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector
+      RADIXDLT_VALIDATOR_KEY_LOCATION: "/home/radixdlt/node-keystore.ks"
+      RADIXDLT_SIGN_ENABLE: "true"
+      RADIXDLT_API_PORT: 3333 # TODO: put common data into variables
+      RADIXDLT_NETWORK_ID: 1
+      RADIXDLT_NETWORK_USE_PROXY_PROTOCOL: "false"
+      RADIX_NODE_KEYSTORE_PASSWORD: "${RADIXDLT_NODE_KEY_PASSWORD}"
+      RADIXDLT_TRANSACTIONS_API_ENABLE: "true"
+      # If you want use same user from your host, you can pass LOCAL_USER_ID enviroment variable, else it will default to 999.
+      # Command `id` will show your uid of the user from terminal. Replace it with <uid of local user> and uncomment the below line
+      # LOCAL_USER_ID: <uid of local user>
+    volumes:
+    # NAMED VOLUMES: To mount the ledger onto a named docker volume uncomment the below line.This named docker volumes can be externally binded to directory in below volumes section
+      - "core_ledger:/home/radixdlt/RADIXDB"
+      - "./radixdlt/node-keystore.ks:/home/radixdlt/node-keystore.ks"
+
+# --------------------- NGINX - PROXY --------------------------------
+
+  nginx:
+    image: radixdlt/radixdlt-nginx:1.3.4
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "443:443"
+      - "30000:30000"
+    environment:
+      RADIXDLT_NETWORK_USE_PROXY_PROTOCOL: "false"
+      RADIXDLT_TRANSACTIONS_API_ENABLE: "true"
+      RADIXDLT_GATEWAY_API_ENABLE: 'true'
+      RADIXDLT_GATEWAY_BEHIND_AUTH: 'true'
+
+    volumes:
+      - "nginx_secrets:/etc/nginx/secrets"
+
+# ---------------------- AGGREGATOR & GATEWAY API -----------------------
+
+  data_aggregator:
+    cpus: 2.0
+    environment:
+      ASPNETCORE_URLS: http://*:80
+      RADIX_NG_AGGREGATOR__ConnectionStrings__AggregatorDbContext: Host=db:5432;Database=radixdlt_ledger;Username=$DB_USER;Password=$DB_PASSWORD # TODO: put common data into variables
+      RADIX_NG_AGGREGATOR__CoreApiNodes__0__CoreApiAddress: http://core:3333 # TODO: put common data into variables
+      RADIX_NG_AGGREGATOR__CoreApiNodes__0__Enabled: 'true'
+      RADIX_NG_AGGREGATOR__CoreApiNodes__0__Name: Core
+      RADIX_NG_AGGREGATOR__CoreApiNodes__0__TrustWeighting: '1'
+      RADIX_NG_AGGREGATOR__DisableCoreApiHttpsCertificateChecks: 'false'
+      RADIX_NG_AGGREGATOR__MaxWaitForDbOnStartupMs: '90'
+      RADIX_NG_AGGREGATOR__NetworkName: mainnet
+    image: radixdlt/ng-data-aggregator:1.1.8
+    ports:
+    - 5208:80
+    - 1234:1234
+    restart: unless-stopped
+    depends_on:
+      - db # TODO: put common data into variables
+      - core # TODO: put common data into variables
+  
+  gateway_api:
+    environment:
+      ASPNETCORE_URLS: http://*:80
+      RADIX_NG_API__ConnectionStrings__ReadOnlyDbContext: Host=db:5432;Database=radixdlt_ledger;Username=$DB_USER;Password=$DB_PASSWORD # TODO: put common data into variables
+      RADIX_NG_API__ConnectionStrings__ReadWriteDbContext: Host=db:5432;Database=radixdlt_ledger;Username=$DB_USER;Password=$DB_PASSWORD # TODO: put common data into variables
+      RADIX_NG_API__CoreApiNodes__0__CoreApiAddress: http://core:3333 # TODO: put common data into variables
+      RADIX_NG_API__CoreApiNodes__0__Enabled: 'true'
+      RADIX_NG_API__CoreApiNodes__0__Name: Core
+      RADIX_NG_API__CoreApiNodes__0__RequestWeighting: '1'
+      RADIX_NG_API__DisableCoreApiHttpsCertificateChecks: 'false'
+      RADIX_NG_API__EnableSwagger: 'true'
+      RADIX_NG_API__MaxPageSize: '30'
+      RADIX_NG_API__MaxWaitForDbOnStartupMs: '90'
+      RADIX_NG_API__NetworkName: mainnet
+    image: radixdlt/ng-gateway-api:1.1.8
+    ports:
+    - 5207:80
+    - 1235:1235
+    restart: unless-stopped
+    depends_on:
+      - db # TODO: put common data into variables
+      - core # TODO: put common data into variables
+  
+  db:
+    image: "postgres:12.9-alpine"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=$DB_USER
+      - POSTGRES_PASSWORD=$DB_PASSWORD
+      - POSTGRES_DB=radixdlt_ledger
+
+# ---------------------- MONITORING ------------------------
+
+  prometheus:
+    image: radixdlt/radixdlt-prometheus:latest #prom/prometheus:latest # TODO: lock versions; radixdlt/radixdlt-prometheus:latest?
+    #container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml.rdx:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    # command:
+    #   - '--config.file=/etc/prometheus/prometheus.yml'
+    #   - '--storage.tsdb.path=/prometheus'
+    #   - '--web.console.libraries=/etc/prometheus/console_libraries'
+    #   - '--web.console.templates=/etc/prometheus/consoles'
+    #   - '--web.enable-lifecycle'
+    ports:
+      - 9090:9090
+    depends_on:
+      - core
+      - gateway_api
+      - data_aggregator
+
+  grafana:
+    image: grafana/grafana:7.5.4 #grafana/grafana-oss:latest # TODO: lock versions
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+    volumes:
+      - ./grafana/provisioning/datasources/datasource.yml.rdx:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./grafana/provisioning/dashboards/:/etc/grafana/provisioning/dashboards:rw
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+    nginx_secrets:
+    prometheus_data:
+    grafana_data:
+    postgresql_data:
+    tracker_cache_data:
+    core_ledger:
+
+networks:
+  default:
+    driver: bridge
