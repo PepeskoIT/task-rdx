@@ -21,7 +21,7 @@ MONITOR_DATA_PATH = "/monitor"
 
 ADDRESSES_TO_MONITOR_KEY = "addresses_to_monitor"
 LAST_STATE_VERSION_KEY = "last_state_version"
-TRANSACTIONS_KEY = "transactions"
+TRANSFERS_KEY = "transfers"
 
 
 cache_main = Cache(
@@ -43,7 +43,9 @@ async def get_status():
 @router.get(TRANSFERS_DATA_PATH)
 async def get_transfers():
     return JSONResponse(
-        content=jsonable_encoder(await cache_main.get(TRANSACTIONS_KEY) or [])
+        content=jsonable_encoder(
+            await cache_transfers.get(TRANSFERS_KEY) or []
+            )
         )
 
 
@@ -52,10 +54,14 @@ async def get_transfer(item_id):
     logger.debug(f"start with id {item_id}")
     response = []
 
-    all_transactions = await cache_main.get(TRANSACTIONS_KEY) or []
-    for transaction in all_transactions:
-        if item_id in (transaction["rri"], transaction["add_to_address"]):
-            response.append(transaction)
+    stored_transfers = await cache_transfers.get(TRANSFERS_KEY) or []
+    # TODO: performance key lookup issue. Consider regular db with proper key
+    # indexing for efficient lookups, take a look at REDIS OM or apply some
+    # key hashing.
+    for transfer in stored_transfers:
+        # TODO: create common data class for transfer metadata
+        if item_id in (transfer["rri"], transfer["to_address"]):
+            response.append(transfer)
 
     return JSONResponse(content=jsonable_encoder(response))
 

@@ -37,7 +37,7 @@ scrape_configs:
       insecure_skip_verify: true
     basic_auth:
       username: "metrics"
-      password: "z+zTAtjjl4O3k5aKsCZQ0eGmI8Xej2NNKyjI+98z1sw=" # TODO: store more securely
+      password: "WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=" # TODO: store more securely
     relabel_configs:
     - regex: ([^:]+):\d+
       source_labels:
@@ -53,7 +53,7 @@ scrape_configs:
       insecure_skip_verify: true
     basic_auth:
       username: "metrics"
-      password: "z+zTAtjjl4O3k5aKsCZQ0eGmI8Xej2NNKyjI+98z1sw=" # TODO: store more securely
+      password: "WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=" # TODO: store more securely
     static_configs:
     - labels:
         container: gateway-api
@@ -70,7 +70,7 @@ scrape_configs:
       insecure_skip_verify: true
     basic_auth:
       username: "metrics"
-      password: "z+zTAtjjl4O3k5aKsCZQ0eGmI8Xej2NNKyjI+98z1sw=" # TODO: store more securely
+      password: "WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=" # TODO: store more securely
     static_configs:
   - labels:
       container: data-aggregator

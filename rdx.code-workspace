@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "sync"
+		},
+		{
+			"path": "api"
+		},
+		{
+			"path": "docker"
+		}
+	]
+}

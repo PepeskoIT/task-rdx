@@ -4,7 +4,7 @@ global:
   scrape_interval: 5s
 scrape_configs:
 - basic_auth:
-    password: z+zTAtjjl4O3k5aKsCZQ0eGmI8Xej2NNKyjI+98z1sw=
+    password: WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=
     username: metrics
   job_name: mynode
   metrics_path: /prometheus/metrics
@@ -22,7 +22,7 @@ scrape_configs:
   tls_config:
     insecure_skip_verify: true
 - basic_auth:
-    password: z+zTAtjjl4O3k5aKsCZQ0eGmI8Xej2NNKyjI+98z1sw=
+    password: WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=
     username: metrics
   job_name: gateway
   metrics_path: /gateway/metrics
@@ -36,7 +36,7 @@ scrape_configs:
   tls_config:
     insecure_skip_verify: true
 - basic_auth:
-    password: z+zTAtjjl4O3k5aKsCZQ0eGmI8Xej2NNKyjI+98z1sw=
+    password: WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=
     username: metrics
   job_name: aggregator
   metrics_path: /aggregator/metrics

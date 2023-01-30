@@ -1,0 +1,5 @@
+.env.local
+logs
+node-keystore.ks
+__pycache__
+.pytest*

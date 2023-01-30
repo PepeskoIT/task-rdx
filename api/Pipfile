@@ -13,6 +13,7 @@ uvicorn = {extras = ["gunicorn"], version = "*"}
 flake8 = "*"
 pytest = "*"
 pytest-asyncio = "*"
+httpx = "*"
 
 [requires]
 python_version = "3.10"

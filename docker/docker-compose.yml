@@ -3,19 +3,18 @@ version: '3.8'
 # TODO: add networks: api / monitoring / backend etc.
 
 x-logging: &default-logging
- logging:
-   options:
-     max-size: "100m"
-     max-file: "3"
-   driver: local
+  logging:
+    options:
+      max-size: "100m"
+      max-file: "3"
+    driver: local
 
 x-restart: &default-restart
- restart: "no"
+  restart: "no"
 
 services:
 # ------------------- TASK API BACKEND ---------------------
   tracker-api:
-    #container_name: api
     build:
       dockerfile: docker/api/Dockerfile
       context: ./..
@@ -23,19 +22,19 @@ services:
         - APP_PATH=/usr/local/src
     environment:
       APP_LOGGER_NAME: tracker-api
-      WSGI_WORKERS_COUNT: 2
-      WSGI_LOG_LEVEL: debug
-      WSGI_PORT: $CONTAINER_BACKEND_PORT
+      CACHE_PORT: 6379
+      CACHE_URL: tracker-cache
+      CORE_API_PASSWORD: $CORE_API_PASSWORD
       CORE_API_PORT: 443
       CORE_API_URL: nginx
       CORE_API_USER: $CORE_API_USER
-      CORE_API_PASSWORD: $CORE_API_PASSWORD
+      NETWORK_API_PASSWORD: $CORE_API_PASSWORD
       NETWORK_API_PORT: 443
       NETWORK_API_URL: nginx
       NETWORK_API_USER: $CORE_API_USER
-      NETWORK_API_PASSWORD: $CORE_API_PASSWORD
-      CACHE_PORT: 6379
-      CACHE_URL: tracker-cache
+      WSGI_LOG_LEVEL: debug
+      WSGI_PORT: $CONTAINER_BACKEND_PORT
+      WSGI_WORKERS_COUNT: 2
     ports:
       - $HOST_BACKEND_PORT:$CONTAINER_BACKEND_PORT
     depends_on:
@@ -46,7 +45,6 @@ services:
     <<: *default-restart
 
   tracker-sync:
-    #container_name: api
     build:
       dockerfile: docker/sync/Dockerfile
       context: ./..
@@ -54,27 +52,28 @@ services:
         - APP_PATH=/usr/local/src
     environment:
       APP_LOGGER_NAME: tracker-sync
-      WSGI_PORT: $CONTAINER_BACKEND_PORT
+      CACHE_PORT: 6379
+      CACHE_URL: tracker-cache
+      CORE_API_PASSWORD: $CORE_API_PASSWORD
       CORE_API_PORT: 443
       CORE_API_URL: nginx
       CORE_API_USER: $CORE_API_USER
-      CORE_API_PASSWORD: $CORE_API_PASSWORD
+      ONLY_MONITORED_ADDRESSES: $ONLY_MONITORED_ADDRESSES
+      NETWORK_API_PASSWORD: $CORE_API_PASSWORD
       NETWORK_API_PORT: 443
       NETWORK_API_URL: nginx
       NETWORK_API_USER: $CORE_API_USER
-      NETWORK_API_PASSWORD: $CORE_API_PASSWORD
-      CACHE_PORT: 6379
-      CACHE_URL: tracker-cache
+      WSGI_PORT: $CONTAINER_BACKEND_PORT
     depends_on:
+      # TODO: implement health-check for checking if core api accepts requests
       - core
       - tracker-cache
     <<: *default-logging 
     <<: *default-restart
 
   tracker-cache:
-    # container_name: cache
     image: redis:alpine
-    command: redis-server --port 6379 --loglevel warning #--save 3600 1
+    command: redis-server --port 6379 --loglevel warning
     <<: *default-logging
     <<: *default-restart
     ports:
@@ -91,21 +90,20 @@ services:
         soft: 65536
         hard: 65536
       memlock: -1
-    restart: unless-stopped
     mem_limit: 16000m
     cap_add:
       - NET_ADMIN
     environment:
-      RADIXDLT_NETWORK_SEEDS_REMOTE: "${RADIXDLT_NETWORK_NODE}"
-      RADIXDLT_LOG_LEVEL: info
       JAVA_OPTS: --enable-preview -server -Xms8g -Xmx8g  -XX:MaxDirectMemorySize=2048m -XX:+HeapDumpOnOutOfMemoryError -XX:+UseCompressedOops -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Djavax.net.ssl.trustStoreType=jks -Djava.security.egd=file:/dev/urandom -DLog4jContextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector
-      RADIXDLT_VALIDATOR_KEY_LOCATION: "/home/radixdlt/node-keystore.ks"
-      RADIXDLT_SIGN_ENABLE: "true"
-      RADIXDLT_API_PORT: 3333 # TODO: put common data into variables
-      RADIXDLT_NETWORK_ID: 1
-      RADIXDLT_NETWORK_USE_PROXY_PROTOCOL: "false"
       RADIX_NODE_KEYSTORE_PASSWORD: "${RADIXDLT_NODE_KEY_PASSWORD}"
+      RADIXDLT_API_PORT: 3333 # TODO: put common data into variables
+      RADIXDLT_LOG_LEVEL: info
+      RADIXDLT_NETWORK_ID: 1
+      RADIXDLT_NETWORK_SEEDS_REMOTE: "${RADIXDLT_NETWORK_NODE}"
+      RADIXDLT_NETWORK_USE_PROXY_PROTOCOL: "false"
+      RADIXDLT_SIGN_ENABLE: "true"
       RADIXDLT_TRANSACTIONS_API_ENABLE: "true"
+      RADIXDLT_VALIDATOR_KEY_LOCATION: "/home/radixdlt/node-keystore.ks"
       # If you want use same user from your host, you can pass LOCAL_USER_ID enviroment variable, else it will default to 999.
       # Command `id` will show your uid of the user from terminal. Replace it with <uid of local user> and uncomment the below line
       # LOCAL_USER_ID: <uid of local user>
@@ -113,6 +111,8 @@ services:
     # NAMED VOLUMES: To mount the ledger onto a named docker volume uncomment the below line.This named docker volumes can be externally binded to directory in below volumes section
       - "core_ledger:/home/radixdlt/RADIXDB"
       - "./radixdlt/node-keystore.ks:/home/radixdlt/node-keystore.ks"
+    <<: *default-logging 
+    <<: *default-restart
 
 # --------------------- NGINX - PROXY --------------------------------
 
@@ -127,13 +127,14 @@ services:
       - "443:443"
       - "30000:30000"
     environment:
-      RADIXDLT_NETWORK_USE_PROXY_PROTOCOL: "false"
-      RADIXDLT_TRANSACTIONS_API_ENABLE: "true"
       RADIXDLT_GATEWAY_API_ENABLE: 'true'
       RADIXDLT_GATEWAY_BEHIND_AUTH: 'true'
-
+      RADIXDLT_NETWORK_USE_PROXY_PROTOCOL: "false"
+      RADIXDLT_TRANSACTIONS_API_ENABLE: "true"
     volumes:
       - "nginx_secrets:/etc/nginx/secrets"
+    <<: *default-logging 
+    <<: *default-restart
 
 # ---------------------- AGGREGATOR & GATEWAY API -----------------------
 
@@ -153,10 +154,11 @@ services:
     ports:
     - 5208:80
     - 1234:1234
-    restart: unless-stopped
     depends_on:
       - db # TODO: put common data into variables
       - core # TODO: put common data into variables
+    <<: *default-logging 
+    <<: *default-restart
   
   gateway_api:
     environment:
@@ -176,10 +178,11 @@ services:
     ports:
     - 5207:80
     - 1235:1235
-    restart: unless-stopped
     depends_on:
       - db # TODO: put common data into variables
       - core # TODO: put common data into variables
+    <<: *default-logging 
+    <<: *default-restart
   
   db:
     image: "postgres:12.9-alpine"
@@ -188,43 +191,40 @@ services:
     volumes:
       - postgresql_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=$DB_USER
-      - POSTGRES_PASSWORD=$DB_PASSWORD
       - POSTGRES_DB=radixdlt_ledger
+      - POSTGRES_PASSWORD=$DB_PASSWORD
+      - POSTGRES_USER=$DB_USER
+    <<: *default-logging 
+    <<: *default-restart
 
 # ---------------------- MONITORING ------------------------
 
   prometheus:
-    image: radixdlt/radixdlt-prometheus:latest #prom/prometheus:latest # TODO: lock versions; radixdlt/radixdlt-prometheus:latest?
-    #container_name: prometheus
-    restart: unless-stopped
+    image: radixdlt/radixdlt-prometheus:latest
     volumes:
       - ./prometheus/prometheus.yml.rdx:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
-    # command:
-    #   - '--config.file=/etc/prometheus/prometheus.yml'
-    #   - '--storage.tsdb.path=/prometheus'
-    #   - '--web.console.libraries=/etc/prometheus/console_libraries'
-    #   - '--web.console.templates=/etc/prometheus/consoles'
-    #   - '--web.enable-lifecycle'
     ports:
       - 9090:9090
     depends_on:
       - core
       - gateway_api
       - data_aggregator
+    <<: *default-logging 
+    <<: *default-restart
 
   grafana:
-    image: grafana/grafana:7.5.4 #grafana/grafana-oss:latest # TODO: lock versions
+    image: grafana/grafana:7.5.4
     ports:
       - 3000:3000
-    restart: unless-stopped
     volumes:
       - ./grafana/provisioning/datasources/datasource.yml.rdx:/etc/grafana/provisioning/datasources/datasource.yml
       - ./grafana/provisioning/dashboards/:/etc/grafana/provisioning/dashboards:rw
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
+    <<: *default-logging 
+    <<: *default-restart
 
 volumes:
     nginx_secrets:

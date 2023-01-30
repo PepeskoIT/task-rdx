@@ -8,12 +8,9 @@ WORKDIR $APP_PATH
 RUN apt-get clean \
     && apt-get update \
     && apt-get install -y locales \
-    cron \
     && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
     && locale-gen \
     && rm -rf /var/cache/apt
-
-RUN touch /var/log/cron.log 
 
 RUN pip3 install pipenv 
 COPY sync/Pipfile sync/Pipfile.lock ./

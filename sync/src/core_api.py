@@ -11,6 +11,8 @@ logger = logging.getLogger(APP_LOGGER_NAME)
 
 class AsyncApiClient:
 
+    # TODO: add request retry
+
     def __init__(self, url, port, login, password) -> None:
         self.url = url
         self.port = port
@@ -27,7 +29,7 @@ class AsyncApiClient:
             f"https://{self.url}:{self.port}",
             auth=aiohttp.BasicAuth(self.login, self.password, 'utf-8'),
             )
-
+    
     async def close(self):
         await self.session.close()
         self.session = None
