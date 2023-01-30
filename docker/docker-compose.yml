@@ -202,7 +202,7 @@ services:
   prometheus:
     image: radixdlt/radixdlt-prometheus:latest
     volumes:
-      - ./prometheus/prometheus.yml.rdx:/etc/prometheus/prometheus.yml
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     ports:
       - 9090:9090
@@ -218,7 +218,7 @@ services:
     ports:
       - 3000:3000
     volumes:
-      - ./grafana/provisioning/datasources/datasource.yml.rdx:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./grafana/provisioning/datasources/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
       - ./grafana/provisioning/dashboards/:/etc/grafana/provisioning/dashboards:rw
       - grafana_data:/var/lib/grafana
     depends_on:

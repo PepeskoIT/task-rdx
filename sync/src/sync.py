@@ -178,6 +178,17 @@ def get_token_transfers(transaction: Mapping) -> Sequence[Mapping]:
 async def get_transactions(
     state_version: Union[str, int], limit: Union[str, int]
 ) -> Sequence:
+    """Request transactions from Core Api.
+
+    Args:
+        state_version (Union[str, int]): start version from which we fetch
+            transactions.
+
+        limit (Union[str, int]): limit of returned transections
+
+    Returns:
+        Sequence: transactions
+    """
     transactions = (await (await core_api.post(
         CORE_API_TRANSACTIONS_ENDPOINT, ssl=False,
         json={
@@ -240,6 +251,7 @@ async def sync() -> None:
 
     # TODO: instead of batch processing consider stream for lower memory usage
     for _ in range(iters):
+        # TODO: consider utilizing async instead sequance request sending
         transactions = await get_transactions(
             cur_state_version, TRANSATIONS_QUERY_LIMIT
         )

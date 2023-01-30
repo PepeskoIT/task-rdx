@@ -1,79 +1,51 @@
-# my global config
+---
 global:
-  scrape_interval: 15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
-  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
-  # scrape_timeout is set to the global default (10s).
-
-# Alertmanager configuration
-alerting:
-  alertmanagers:
-    - static_configs:
-        - targets:
-          # - alertmanager:9093
-
-# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
-rule_files:
-  # - "first_rules.yml"
-  # - "second_rules.yml"
-
-# A scrape configuration containing exactly one endpoint to scrape:
-# Here it's Prometheus itself.
+  evaluation_interval: 15s
+  scrape_interval: 5s
 scrape_configs:
-  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
-  # - job_name: "prometheus"
-
-  #   # metrics_path defaults to '/metrics'
-  #   # scheme defaults to 'http'.
-
-  #   static_configs:
-  #     - targets: ["localhost:9090"]
-  
-  - job_name: "core"
-    scheme: https
-    static_configs:
-      - targets: ["docker-nginx-1"] # TODO: make me more common
-    metrics_path: "/prometheus/metrics"
-    tls_config:
-      insecure_skip_verify: true
-    basic_auth:
-      username: "metrics"
-      password: "WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=" # TODO: store more securely
-    relabel_configs:
-    - regex: ([^:]+):\d+
-      source_labels:
-      - __address__
-      target_label: public_ip
-  
-  - job_name: "gateway-api"
-    scheme: https
-    static_configs:
-      - targets: ["docker-nginx-1"] #TODO: make me more common
-    metrics_path: "/gateway/metrics"
-    tls_config:
-      insecure_skip_verify: true
-    basic_auth:
-      username: "metrics"
-      password: "WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=" # TODO: store more securely
-    static_configs:
-    - labels:
-        container: gateway-api
-        network: core
-      targets:
-      - localhost
-
-  - job_name: "data-aggregator"
-    scheme: https
-    static_configs:
-      - targets: ["docker-nginx-1"] #TODO: make me more common
-    metrics_path: "/aggregator/metrics"
-    tls_config:
-      insecure_skip_verify: true
-    basic_auth:
-      username: "metrics"
-      password: "WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=" # TODO: store more securely
-    static_configs:
+- basic_auth:
+    password: WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=
+    username: metrics
+  job_name: mynode
+  metrics_path: /prometheus/metrics
+  relabel_configs:
+  - regex: ([^:]+):\d+
+    source_labels:
+    - __address__
+    target_label: public_ip
+  scheme: https
+  static_configs:
+  - labels:
+      network: mynode
+    targets:
+    - docker-nginx-1
+  tls_config:
+    insecure_skip_verify: true
+- basic_auth:
+    password: WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=
+    username: metrics
+  job_name: gateway
+  metrics_path: /gateway/metrics
+  scheme: https
+  static_configs:
+  - labels:
+      container: gateway-api
+      network: mynode
+    targets:
+    - docker-nginx-1
+  tls_config:
+    insecure_skip_verify: true
+- basic_auth:
+    password: WSsq1Dujyk94a4PjBKqfilm8kB3YDssjDcKmm12ndVU=
+    username: metrics
+  job_name: aggregator
+  metrics_path: /aggregator/metrics
+  scheme: https
+  static_configs:
   - labels:
       container: data-aggregator
-      network: core
+      network: mynode
     targets:
-    - localhost
+    - docker-nginx-1
+  tls_config:
+    insecure_skip_verify: true

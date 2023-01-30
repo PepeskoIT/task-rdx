@@ -13,7 +13,7 @@ TRANSACTIONS1_RESULT = [{
         'rdx1qspv65sdsnm3pqckup4garggpxhd4mt6p7ps94apgv79t9qu2g0ly2g45lljc'
     ),
     'rri': 'gnrd_rr1qv0jw6lf83d5q55plnkfcyj8yr3n2epns0zdveudwzyqtm749w',
-    'transfer_amount': 1000000000000000000, 'state_version': 38138606
+    'transfer_amount': '1000000000000000000', 'state_version': 38138606
 }]
 
 TRANSACTIONS2_RESULT = [{
@@ -24,7 +24,7 @@ TRANSACTIONS2_RESULT = [{
         'rdx1qspacch6qjqy7awspx304sev3n4em302en25jd87yrh4hp47grr692cm0kv88'
     ),
     'rri': 'xrd_rr1qy5wfsfh',
-    'transfer_amount': 24000000000000000000000000, 'state_version': 40898
+    'transfer_amount': '24000000000000000000000000', 'state_version': 40898
 }]
 
 TRANSACTIONS3_RESULT = []

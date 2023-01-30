@@ -20,7 +20,7 @@ datasources:
     tlsClientCert: '...'
     tlsClientKey: '...'
   type: prometheus
-  url: http://prometheus:9090/
+  url: http://prometheus:9090/prometheus
   user:
   version: 1
   withCredentials:
