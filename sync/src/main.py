@@ -5,7 +5,7 @@ from sync import sync
 
 async def main():
     while True:
-        await asyncio.sleep(300)
+        await asyncio.sleep(60)
         await sync()
 
 asyncio.run(main())
