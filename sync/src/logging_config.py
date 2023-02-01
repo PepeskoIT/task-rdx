@@ -17,7 +17,7 @@ LOGGING_CONFIG = {
     },
     "loggers": {
         APP_LOGGER_NAME: {
-          "level": "DEBUG",
+          "level": "INFO",
           "handlers": [
             "console"
           ]

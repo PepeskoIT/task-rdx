@@ -15,7 +15,7 @@ logger = logging.getLogger(APP_LOGGER_NAME)
 
 # REDIS
 ADDRESSES_TO_MONITOR_KEY = "addresses_to_monitor"
-LAST_STATE_VERSION_KEY = "last_state_version"
+LOCAL_STATE_VERSION_KEY = "local_state_version"
 TRANSFERS_KEY = "transfers"
 
 # CORE API
@@ -25,6 +25,8 @@ TRANSATIONS_QUERY_LIMIT = 100000
 SUBSTATE_OPERATION_SHUTDOWN = "SHUTDOWN"
 SUBSTATE_OPERATION_BOOTUP = "BOOTUP"
 OPERATION_RESOURCE = "Resource"
+
+ACCOUNT_ADDRESS_PREFIX = "rdx1"
 
 cache_main = Cache(
     Cache.REDIS, endpoint=CACHE_URL, port=CACHE_PORT, namespace="main"
@@ -68,9 +70,10 @@ def is_bootup_substate_operation(substate_operation: str) -> bool:
 
 
 def get_token_transfer_operation(operation_group: Mapping) -> Mapping:
-    """Extracts metadata of simple transfersers.
-    WARNING: Not all cases may be supported yet.
-    # TODO: do more test cases to find missing transfers
+    """Extracts metadata of simple token transfersers from address A to
+    address B. Does not track stacking, burning or network emissions.
+    # TODO: do more test cases to find missing transfers, break into smaller
+    # pieces
 
     Args:
         operation_group (Mapping): object representing part of transaction
@@ -86,53 +89,128 @@ def get_token_transfer_operation(operation_group: Mapping) -> Mapping:
     shutdown_found = False
     from_address = None  # shutdown
     to_address = None  # bootup
-    shutdown_rri = None
-    bootup_amount = None  # positive
-    bootup_rri = None
     transfer_amount = None
+    transfers = {}
+    transfers_meta = {}
+    valid_transactions = []  # I think there should be only one but lets try it
 
     operations = operation_group["operations"]
 
     for operation in operations:
+        # -- CHECKS START
+        # 1. check if Resource Operation
         if not is_resource_operation(operation["type"]):
             continue  # TODO: or abort whole group?
-        operation_amount_data = operation["amount"]
+
+        # 2. check if has amount key
+        try:
+            operation_amount_data = operation["amount"]
+        except KeyError:
+            # does this ever happen in Resource Operation?
+            logger.warning(
+                f"No 'amount' key in resource operations: {operation}"
+            )
+            continue
+
+        # 3. check if stacking
+        operation_entity_identifier = operation["entity_identifier"]
+        try:
+            operation_entity_identifier["sub_entity"]
+        except KeyError:
+            pass
+        else:
+            # don't process staking
+            continue
+
+        # 4. check if token
         resource_type = operation_amount_data["resource_identifier"]["type"]
         if is_token_resource(resource_type):
             rri = operation_amount_data["resource_identifier"]["rri"]
         else:
             continue  # TODO: or abort whole group?
+        # 5. check if address starts with rdx1 prefix?
+        # -- CHECKS END
+
         address = operation["entity_identifier"]["address"]
         amount = operation_amount_data["value"]
         substate_operation = operation["substate"]["substate_operation"]
         if is_shutdown_substate_operation(substate_operation):
-            if shutdown_found:
-                raise NotSupported(
-                    "more then one shutdown"
-                    )
-            else:
-                shutdown_found = True
-            from_address = address
-            shutdown_rri = rri
-        if is_bootup_substate_operation(substate_operation):
-            bootup_rri = rri
-            if bootup_rri != shutdown_rri:
-                raise NotSupported(
-                    "more then one rri"
-                    )
-            to_address = address
-            bootup_amount = amount
-            if to_address != from_address:
-                transfer_amount = bootup_amount
+            shutdown_found = True  # at least one valid shutdown
+        # group by addresses and record balance changes for each
+        try:
+            address_transfers = transfers[address]
+        except KeyError:
+            transfers[address] = {rri: int(amount)}
+        else:
+            # try:
+            address_transfers[rri] += int(amount)
 
-    if transfer_amount:
-        logger.info(f"transfer detected: {operations}")
+    if not shutdown_found:
+        # when there is no shutodwn there is no transfer from A to B
+        return
+
+    # find address pairs for each token - maybe only one token is possible?
+    for address in transfers:
+        address_transfers = transfers[address]
+        for rri in address_transfers:
+            rri_transfer_amount = address_transfers[rri]
+            try:
+                rri_meta = transfers_meta[rri]
+            except KeyError:
+                transfers_meta[rri] = {}  # consider defaultdict
+                rri_meta = transfers_meta[rri]
+            if rri_transfer_amount > 0:
+                if "to" in rri_meta:
+                    logger.error(f"transfers: {transfers}")
+                    raise Exception(
+                        "dupplicated 'to' entries for (address,key) pair in "
+                        "operation group"
+                    )
+                rri_meta["to"] = {
+                    "address": address, "amount": rri_transfer_amount
+                }
+            else:
+                if "from" in rri_meta:
+                    logger.error(f"transfers: {transfers}")
+                    raise Exception(
+                        "dupplicated 'from' entries for (address,key) pair in "
+                        "operation group"
+                    )
+                rri_meta["from"] = {
+                    "address": address, "amount": rri_transfer_amount
+                }
+
+    for rri in transfers_meta:
+        if "from" in transfers_meta[rri] and "to" in transfers_meta[rri]:
+            if (
+                abs(transfers_meta[rri]["to"]["amount"])
+                == abs(transfers_meta[rri]["from"]["amount"])
+            ):
+                from_address = transfers_meta[rri]["from"]["address"]
+                to_address = transfers_meta[rri]["to"]["address"]
+                transfer_amount = str(transfers_meta[rri]["to"]["amount"])
+                valid_transactions.append({
+                    "from_address": from_address, "to_address": to_address,
+                    "rri": rri, "transfer_amount": transfer_amount
+                })
+            else:
+                logger.error(
+                    "Detected transaction but amount's didn't match: "
+                    "f{operation_group}"
+                    )
+
+    if len(valid_transactions) > 1:
+        logger.error(
+            f"Operation group with many valid tranasactions {operation_group}"
+        )
+        raise Exception(
+            "Seems like group operation can have many token transactions!"
+        )
 
         # TODO: create common data class for transfer metadata
-        return {
-            "from_address": from_address, "to_address": to_address,
-            "rri": rri, "transfer_amount": transfer_amount
-        }
+    if valid_transactions:
+        logger.debug(f"transfer detected: {operations}")
+        return valid_transactions[0]
 
 
 def get_token_transfers(transaction: Mapping) -> Sequence[Mapping]:
@@ -205,39 +283,42 @@ async def get_transactions(
 
 
 async def sync() -> None:
-    """Synchronize stored token transfers from local 'last_state_version' to
+    """Synchronize stored token transfers from local 'local_state_version' to
     latest reported 'state_version' reported by Core Api.
     """
+    # TODO: break into smaller pieces
+    transfers_to_add = []
+
     core_api.prepare_session()
     network_api.prepare_session()
 
-    last_state_version = await cache_main.get(LAST_STATE_VERSION_KEY)
-    logger.debug(f"last processed state_version {last_state_version}")
+    local_state_version = await cache_main.get(LOCAL_STATE_VERSION_KEY)
+    logger.debug(f"last processed state_version {local_state_version}")
     latest_state_version = (await (await network_api.post(
         NETWORK_API_STATUS_ENDPOINT, ssl=False,
         json={"network_identifier": {"network": "mainnet"}}
         )).json())["current_state_identifier"]["state_version"]
 
     logger.debug(f"latest reported state_version {latest_state_version}")
-    if last_state_version is None:
+    if local_state_version is None:
         # this is the point from wich we start processing data
         # for now just store the state version and wait for next call
-        await cache_main.set(LAST_STATE_VERSION_KEY, latest_state_version-1)
+        await cache_main.set(LOCAL_STATE_VERSION_KEY, latest_state_version-1)
         return
 
-    if last_state_version >= latest_state_version:
+    if local_state_version >= latest_state_version:
         logger.info(
-            f"last_state_version {last_state_version} >= latest_state_version"
+            f"last_state_version {local_state_version} >= latest_state_version"
             f" {latest_state_version}. nothing to do"
             )
         return
 
-    state_diff = latest_state_version - last_state_version
+    state_diff = latest_state_version - local_state_version
     logger.debug(
         f"difference between last and latest state versions: {state_diff}"
     )
     iters, left = divmod(state_diff, TRANSATIONS_QUERY_LIMIT)
-    cur_state_version = last_state_version
+    cur_state_version = local_state_version
     logger.debug(f"curent state version: {cur_state_version}")
 
     addresses_to_monitor = await cache_main.get(ADDRESSES_TO_MONITOR_KEY)
@@ -295,4 +376,4 @@ async def sync() -> None:
     await cache_transfers.set(
         TRANSFERS_KEY, all_transfers + transfers_to_add
     )
-    await cache_main.set(LAST_STATE_VERSION_KEY, cur_state_version)
+    await cache_main.set(LOCAL_STATE_VERSION_KEY, cur_state_version)
