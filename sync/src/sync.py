@@ -21,7 +21,7 @@ TRANSFERS_KEY = "transfers"
 # CORE API
 CORE_API_TRANSACTIONS_ENDPOINT = "/transactions"
 NETWORK_API_STATUS_ENDPOINT = "/network/status"
-TRANSATIONS_QUERY_LIMIT = 100000
+TRANSACTIONS_QUERY_LIMIT = 100000
 SUBSTATE_OPERATION_SHUTDOWN = "SHUTDOWN"
 SUBSTATE_OPERATION_BOOTUP = "BOOTUP"
 OPERATION_RESOURCE = "Resource"
@@ -30,10 +30,10 @@ ACCOUNT_ADDRESS_PREFIX = "rdx1"
 
 cache_main = Cache(
     Cache.REDIS, endpoint=CACHE_URL, port=CACHE_PORT, namespace="main"
-    )
+)
 cache_transfers = Cache(
-     Cache.REDIS, endpoint=CACHE_URL, port=CACHE_PORT, namespace="transfers"
-    )
+    Cache.REDIS, endpoint=CACHE_URL, port=CACHE_PORT, namespace="transfers"
+)
 
 
 class NotSupported(Exception):
@@ -70,17 +70,13 @@ def is_bootup_substate_operation(substate_operation: str) -> bool:
 
 
 def get_token_transfer_operation(operation_group: Mapping) -> Mapping:
-    """Extracts metadata of simple token transfersers from address A to
+    """Extracts metadata of simple token transferrers from address A to
     address B. Does not track stacking, burning or network emissions.
     # TODO: do more test cases to find missing transfers, break into smaller
     # pieces
 
     Args:
         operation_group (Mapping): object representing part of transaction
-
-    Raises:
-        NotSupported: when ther are multiple shutdowns in operation group
-        NotSupported: when there are multiple rri's in operation group
 
     Returns:
         Mapping: detected token transfer
@@ -146,7 +142,7 @@ def get_token_transfer_operation(operation_group: Mapping) -> Mapping:
             address_transfers[rri] += int(amount)
 
     if not shutdown_found:
-        # when there is no shutodwn there is no transfer from A to B
+        # when there is no shutdown there is no transfer from A to B
         return
 
     # find address pairs for each token - maybe only one token is possible?
@@ -163,7 +159,7 @@ def get_token_transfer_operation(operation_group: Mapping) -> Mapping:
                 if "to" in rri_meta:
                     logger.error(f"transfers: {transfers}")
                     raise Exception(
-                        "dupplicated 'to' entries for (address,key) pair in "
+                        "duplicated 'to' entries for (address,key) pair in "
                         "operation group"
                     )
                 rri_meta["to"] = {
@@ -173,7 +169,7 @@ def get_token_transfer_operation(operation_group: Mapping) -> Mapping:
                 if "from" in rri_meta:
                     logger.error(f"transfers: {transfers}")
                     raise Exception(
-                        "dupplicated 'from' entries for (address,key) pair in "
+                        "duplicated 'from' entries for (address,key) pair in "
                         "operation group"
                     )
                 rri_meta["from"] = {
@@ -197,11 +193,11 @@ def get_token_transfer_operation(operation_group: Mapping) -> Mapping:
                 logger.error(
                     "Detected transaction but amount's didn't match: "
                     "f{operation_group}"
-                    )
+                )
 
     if len(valid_transactions) > 1:
         logger.error(
-            f"Operation group with many valid tranasactions {operation_group}"
+            f"Operation group with many valid transactions {operation_group}"
         )
         raise Exception(
             "Seems like group operation can have many token transactions!"
@@ -218,7 +214,7 @@ def get_token_transfers(transaction: Mapping) -> Sequence[Mapping]:
     Core Api /transactions endpoint response.
 
     Args:
-        transaction (Mapping): single transation
+        transaction (Mapping): single transaction
 
     Returns:
         Sequence[Mapping]: sequence of found transactions
@@ -240,7 +236,7 @@ def get_token_transfers(transaction: Mapping) -> Sequence[Mapping]:
             logger.debug(
                 f"{type(e).__name__} - {str(e)}. "
                 f'{state_version}'
-                )
+            )
         except Exception:
             logger.exception(
                 "Unhandled exception :"
@@ -259,10 +255,11 @@ async def get_transactions(
     """Request transactions from Core Api.
 
     Args:
-        state_version (Union[str, int]): start version from which we fetch
-            transactions.
+        state_version (Union[str, int]): value passed to api's state_version
+            request parameter
 
-        limit (Union[str, int]): limit of returned transections
+        limit (Union[str, int]): value passed to api's "limit"
+            request parameter
 
     Returns:
         Sequence: transactions
@@ -297,11 +294,11 @@ async def sync() -> None:
     latest_state_version = (await (await network_api.post(
         NETWORK_API_STATUS_ENDPOINT, ssl=False,
         json={"network_identifier": {"network": "mainnet"}}
-        )).json())["current_state_identifier"]["state_version"]
+    )).json())["current_state_identifier"]["state_version"]
 
     logger.debug(f"latest reported state_version {latest_state_version}")
     if local_state_version is None:
-        # this is the point from wich we start processing data
+        # this is the point from which we start processing data
         # for now just store the state version and wait for next call
         await cache_main.set(LOCAL_STATE_VERSION_KEY, latest_state_version-1)
         return
@@ -310,16 +307,16 @@ async def sync() -> None:
         logger.info(
             f"last_state_version {local_state_version} >= latest_state_version"
             f" {latest_state_version}. nothing to do"
-            )
+        )
         return
 
     state_diff = latest_state_version - local_state_version
     logger.debug(
         f"difference between last and latest state versions: {state_diff}"
     )
-    iters, left = divmod(state_diff, TRANSATIONS_QUERY_LIMIT)
+    iters, left = divmod(state_diff, TRANSACTIONS_QUERY_LIMIT)
     cur_state_version = local_state_version
-    logger.debug(f"curent state version: {cur_state_version}")
+    logger.debug(f"current state version: {cur_state_version}")
 
     addresses_to_monitor = await cache_main.get(ADDRESSES_TO_MONITOR_KEY)
     logger.debug(f"addresses_to_monitor: {addresses_to_monitor}")
@@ -331,15 +328,17 @@ async def sync() -> None:
     logger.debug(f"transfers in db: {all_transfers}")
 
     # TODO: instead of batch processing consider stream for lower memory usage
+    # TODO: consider node malfunction mitigation - node reports version
     for _ in range(iters):
-        # TODO: consider utilizing async instead sequance request sending
+        # TODO: consider utilizing async requests response aggregation instead
+        # of sync processing
         transactions = await get_transactions(
-            cur_state_version, TRANSATIONS_QUERY_LIMIT
+            cur_state_version, TRANSACTIONS_QUERY_LIMIT
         )
         for transaction in transactions:
             transfers_to_add = get_token_transfers(transaction)
-        cur_state_version += TRANSATIONS_QUERY_LIMIT
-        logger.debug(f"curent state version: {cur_state_version}")
+        cur_state_version += len(transactions)
+        logger.debug(f"current state version: {cur_state_version}")
 
     if left:
         transactions = await get_transactions(
@@ -347,15 +346,28 @@ async def sync() -> None:
         )
         for transaction in transactions:
             transfers_to_add.extend(get_token_transfers(transaction))
-        cur_state_version += left
+        cur_state_version += len(transactions)
 
-    logger.debug(f"curent state version: {cur_state_version}")
+    logger.debug(f"current state version: {cur_state_version}")
 
     if cur_state_version == latest_state_version:
         logger.info(
             f"current state_version: {cur_state_version} "
             f"== latest state version: {latest_state_version}"
         )
+    else:
+        logger.critical(
+            "Synchronization process did not cover whole state difference. "
+            f"current state_version: {cur_state_version} "
+            f"!= latest state version: {latest_state_version}. "
+            "One of possible causes could be that node did not provide all "
+            "available transactions"
+        )
+        raise NotSupported(
+            "Case when api is returning less data then promised is "
+            "not supported at the moment."
+        )
+
     logger.info("number of all new transfers: "f"{len(transfers_to_add)}")
     if int(ONLY_MONITORED_ADDRESSES):
         # TODO: should we allow deleting old detected transfers if
